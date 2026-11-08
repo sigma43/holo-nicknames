@@ -16,7 +16,8 @@ header h1{font-size:1.15rem;margin:0 0 2px}
 header p{margin:0;font-size:.85rem;color:#555}
 .bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .bar input{flex:1;min-width:160px;padding:6px 8px;border:1px solid #888;border-radius:4px}
-#menu{display:none}
+#menu,#navClose{display:none}
+mark{background:#ffe066;color:inherit}
 .wrap{display:flex;align-items:flex-start}
 nav{width:220px;flex:none;position:sticky;top:0;max-height:100vh;overflow:auto;padding:12px;border-right:1px solid #ccc}
 nav a{display:block;padding:6px 4px;color:var(--ac);text-decoration:none}
@@ -44,7 +45,8 @@ dialog .chk input{width:auto}
 .msg{margin:10px 0 0;min-height:1.4em}
 .row{display:flex;gap:8px;margin-top:14px}
 @media(max-width:760px){
- #menu{display:inline-block}
+ #menu,#navClose{display:inline-block}
+ #navClose{margin-bottom:8px}
  nav{display:none;position:fixed;inset:0 25% 0 0;z-index:5;background:#fff;max-height:none;border-right:1px solid #222}
  nav.open{display:block}
  thead{display:none}
@@ -62,13 +64,13 @@ dialog .chk input{width:auto}
  <p>非公式・非営利のファンサイトです。公式とは関係ありません。</p>
  <div class="bar">
   <button class="btn" id="menu" type="button">話し手一覧</button>
-  <input id="q" type="search" placeholder="話し手・相手の名前で絞り込み" aria-label="絞り込み">
+  <input id="q" type="search" placeholder="話し手・二人称・補足で絞り込み" aria-label="絞り込み">
   <button class="btn" data-open="dInfo" type="button">情報提供</button>
   <button class="btn" data-open="dFb" type="button">ご意見・要望</button>
  </div>
 </header>
 <div class="wrap">
- <nav id="nav" aria-label="話し手一覧"></nav>
+ <nav id="nav" aria-label="話し手一覧"><button class="btn" id="navClose" type="button">閉じる</button><div id="navList"></div></nav>
  <main id="list">読み込み中…</main>
 </div>
 <footer>掲載内容は有志の確認によるもので、正確さを保証するものではありません。限定配信など、有料コンテンツから得た情報は掲載しません。</footer>
@@ -79,12 +81,12 @@ dialog .chk input{width:auto}
   <label>種類
    <select name="type" required><option>新規追加</option><option>内容の修正</option><option>削除の依頼</option></select></label>
   <label>話し手(呼ぶ側)<input name="s" list="names" required maxlength="50"></label>
-  <label>相手(呼ばれる側)<input name="t" list="names" required maxlength="50"></label>
+  <label>相手(呼ばれる側)<input name="t" list="namesT" required maxlength="50"></label>
   <label>二人称 <span>複数ある場合は「、」で区切る</span><input name="n" required maxlength="200"></label>
   <label>特例の二人称 <span>任意</span><input name="x" maxlength="200"></label>
   <label>補足 <span>任意・場面や条件など</span><textarea name="note" rows="2" maxlength="1000"></textarea></label>
-  <label>出典の配信日<input name="date" type="date" required></label>
-  <label>出典の動画URL<input name="url" type="url" required maxlength="300" placeholder="https://"></label>
+  <label>出典の配信日 <span>任意</span><input name="date" type="date"></label>
+  <label>出典の動画URL <span>任意</span><input name="url" type="text" inputmode="url" maxlength="300" placeholder="https://"></label>
   <label>出典の時間 <span>任意・例 12:34</span><input name="time" maxlength="20"></label>
   <label>連絡先 <span>任意・確認が必要な場合のみ使用します</span><input name="contact" maxlength="200"></label>
   <label class="chk"><input type="checkbox" name="ok" required> メンバーシップ限定など、有料の限定配信から得た情報ではありません</label>
@@ -92,7 +94,7 @@ dialog .chk input{width:auto}
   <p class="msg" role="status"></p>
   <div class="row"><button class="btn" type="submit">送信する</button><button class="btn" type="button" data-close>閉じる</button></div>
  </form>
- <datalist id="names"></datalist>
+ <datalist id="names"></datalist><datalist id="namesT"></datalist>
 </dialog>
 
 <dialog id="dFb">
@@ -114,7 +116,13 @@ const API = "https://script.google.com/macros/s/AKfycbzTIBWENAVcqlKrbDNFCgsHSC9F
 const UNK = "(呼称未確認)";
 const $ = s => document.querySelector(s);
 const h = (t, p = {}, ...c) => { const e = document.createElement(t); Object.assign(e, p); e.append(...c); return e; };
-let rows = [], last = 0;
+let rows = [], allNames = [], last = 0;
+const URL_RE = /^https?:\/\/[^\s\/]+\.[^\s\/]+\S*$/;
+function fillT() { // 相手の候補: 話し手と同じ名前には(一人称)を付ける
+  const s = $("#fInfo").elements.s.value.trim(), dl = $("#namesT");
+  dl.replaceChildren();
+  allNames.forEach(n => dl.append(h("option", { value: n === s ? n + "(一人称)" : n })));
+}
 
 function nickCell(r, label) {
   const td = h("td", {}, );
@@ -127,7 +135,7 @@ function nickCell(r, label) {
 
 function render() {
   const speakers = [...new Set(rows.map(r => r.s))];
-  const nav = $("#nav"), list = $("#list");
+  const nav = $("#navList"), list = $("#list");
   nav.replaceChildren(); list.replaceChildren();
   if (!speakers.length) { list.textContent = "まだデータがありません。"; return; }
   speakers.forEach((s, i) => {
@@ -137,11 +145,14 @@ function render() {
     const gs = [...new Set(mine.map(r => r.g))];
     gs.flatMap(g => [g, ...mine.filter(r => r.g === g)]).forEach(r => {
       if (typeof r === "string") { if (r) tb.append(h("tr", { className: "grp" }, h("th", { colSpan: 4 }, r))); return; }
-      const rev = rows.find(x => x.s === r.t && x.t === r.s);
-      const tr = h("tr", {}, h("td", { textContent: r.t }),
-        nickCell(r, "呼び方(" + s + "→)"), nickCell(rev, "呼ばれ方(" + s + "←)"), h("td", { textContent: r.note }));
+      const self = r.t === r.s; // 話し手と相手が同じ=一人称
+      const rev = self ? null : rows.find(x => x.s === r.t && x.t === r.s);
+      const revCell = self ? h("td", { textContent: "-" }) : nickCell(rev, "呼ばれ方(" + s + "←)");
+      if (self) revCell.dataset.l = "呼ばれ方(" + s + "←)";
+      const tr = h("tr", {}, h("td", { textContent: self ? r.t + "(一人称)" : r.t }),
+        nickCell(r, "呼び方(" + s + "→)"), revCell, h("td", { textContent: r.note }));
       tr.children[0].dataset.l = "相手"; tr.children[3].dataset.l = "補足";
-      tr.dataset.t = r.t;
+      tr.dataset.h = [r.n, r.x, rev && rev.n, rev && rev.x, r.note].filter(Boolean).join("\n").toLowerCase();
       tb.append(tr);
     });
     const th = h("thead", {}, h("tr", {}, h("th", {}, "相手"), h("th", {}, "呼び方 " + s + "→"), h("th", {}, "呼ばれ方 " + s + "←"), h("th", {}, "補足")));
@@ -149,30 +160,54 @@ function render() {
     d.dataset.s = s;
     list.append(d);
   });
+  allNames = [...new Set(rows.flatMap(r => [r.s, r.t]))];
   const dl = $("#names"); dl.replaceChildren();
-  [...new Set(rows.flatMap(r => [r.s, r.t]))].forEach(n => dl.append(h("option", { value: n })));
+  allNames.forEach(n => dl.append(h("option", { value: n })));
+  fillT();
 }
 
 function go(id) {
   const d = document.getElementById(id);
   if (!d) return;
-  d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" });
-  $("#nav").classList.remove("open");
+  if (d.open) d.open = false;
+  else { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  closeNav();
 }
+function closeNav() { $("#nav").classList.remove("open"); $("#menu").setAttribute("aria-expanded", "false"); }
 $("#nav").addEventListener("click", e => {
   const a = e.target.closest("a"); if (!a) return;
   e.preventDefault(); go(a.getAttribute("href").slice(1));
 });
 $("#menu").onclick = () => $("#menu").setAttribute("aria-expanded", $("#nav").classList.toggle("open"));
+$("#navClose").onclick = closeNav;
+document.addEventListener("click", e => { if (!e.target.closest("#nav, #menu")) closeNav(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeNav(); });
 
+function unmark(root) {
+  root.querySelectorAll("mark").forEach(m => m.replaceWith(m.textContent));
+  root.normalize();
+}
+function mark(el, q) {
+  const ns = [], w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  while (w.nextNode()) ns.push(w.currentNode);
+  ns.forEach(n => {
+    let t = n, i;
+    while ((i = t.data.toLowerCase().indexOf(q)) >= 0) {
+      const mid = t.splitText(i), rest = mid.splitText(q.length);
+      mid.replaceWith(h("mark", {}, mid.data));
+      t = rest;
+    }
+  });
+}
 $("#q").addEventListener("input", e => {
   const q = e.target.value.trim().toLowerCase();
   document.querySelectorAll("details").forEach((d, i) => {
     const sm = d.dataset.s.toLowerCase().includes(q);
+    unmark(d);
     let n = 0;
     d.querySelectorAll("tbody tr").forEach(tr => {
       const grp = tr.classList.contains("grp");
-      const hit = !q || sm || (!grp && tr.dataset.t.toLowerCase().includes(q));
+      const hit = !q || sm || (!grp && tr.dataset.h.includes(q));
       tr.hidden = grp ? !!q : !hit;
       if (hit && !grp) n++;
     });
@@ -183,7 +218,11 @@ $("#q").addEventListener("input", e => {
     });
     d.hidden = !!q && !n;
     d.open = !!q && n > 0;
-    $("#nav").children[i].hidden = d.hidden;
+    $("#navList").children[i].hidden = d.hidden;
+    if (q) {
+      mark(d.querySelector("summary"), q);
+      d.querySelectorAll("tbody tr:not(.grp)").forEach(tr => [1, 2, 3].forEach(k => mark(tr.children[k], q)));
+    }
   });
 });
 
@@ -196,6 +235,8 @@ async function send(form, kind) {
   if (Date.now() - last < 10000) { msg.textContent = "少し待ってから、もう一度送信してください。"; return; }
   const d = Object.fromEntries(new FormData(form));
   d.kind = kind; d.ok = form.elements.ok ? form.elements.ok.checked : true;
+  if (d.t) d.t = d.t.replace(/\(一人称\)$/, "").trim(); // 選択肢の「(一人称)」は送信前に外す
+  if (d.url && d.url.trim() && !URL_RE.test(d.url.trim())) { msg.textContent = "出典URLが確認できませんでした。"; return; }
   btn.disabled = true; msg.textContent = "送信中…";
   try {
     const r = await fetch(API, { method: "POST", body: JSON.stringify(d) });
@@ -207,11 +248,12 @@ async function send(form, kind) {
     form.reset();
     if (form.elements.s) form.elements.s.value = keep; // 続けて入力できるよう話し手を残す
   } catch (err) {
-    msg.textContent = "送信できませんでした。入力内容を確認し、時間をおいて再度お試しください。";
+    msg.textContent = err.message === "url" ? "出典URLが確認できませんでした。" : "送信できませんでした。入力内容を確認し、時間をおいて再度お試しください。";
   } finally { btn.disabled = false; }
 }
 $("#fInfo").addEventListener("submit", e => { e.preventDefault(); send(e.target, "info"); });
 $("#fFb").addEventListener("submit", e => { e.preventDefault(); send(e.target, "fb"); });
+$("#fInfo").elements.s.addEventListener("input", fillT);
 
 document.querySelectorAll("form").forEach(f => f.addEventListener("input", () => { f.querySelector(".msg").textContent = ""; }));
 fetch(API).then(r => r.json()).then(j => { if (j.error) throw new Error(j.error); rows = j.rows; render(); })
