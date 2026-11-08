@@ -57,6 +57,10 @@ tr.note td{font-size:.8rem;line-height:1.35;padding:2px 10px;color:#333}
 .nwrap{display:flex;gap:8px;align-items:flex-start}
 .nlab{flex:none;font-weight:700;border-right:1px solid #222;padding-right:8px}
 .ntx{min-width:0;overflow-wrap:anywhere}
+.tt{border-bottom:1px dotted currentColor;cursor:help}
+#tipBox{position:fixed;z-index:40;max-width:min(22em,calc(100vw - 16px));background:#222;color:#fff;padding:6px 10px;border-radius:4px;font-size:.85rem;font-weight:400;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+#tipBox[hidden]{display:none}
+#tipBox a{color:#9cc4ff}
 .unk{color:var(--mut)}
 small{display:block;color:#444}
 footer{padding:16px;font-size:.85rem;color:#555;border-top:1px solid #ccc}
@@ -108,6 +112,7 @@ dialog .chk input{width:auto}
  <p>ご意見・ご要望、不具合のご報告は、<button class="lnk" data-open="dFb" type="button">ご意見・要望</button>よりお送りください。</p>
  <p class="pc-only"><button class="lnk" id="keysBtn" type="button">キーボード操作</button>の一覧は、<kbd>?</kbd>キーでも開けます。</p>
 </footer>
+<div id="tipBox" role="tooltip" hidden></div>
 <button class="btn" id="upBtn" type="button" aria-label="開いている項目を一段階だけ閉じる">▲ 一段階閉じる</button>
 
 <dialog id="dInfo">
@@ -176,6 +181,64 @@ function fillT() { // 相手の候補: 話し手と同じ名前には(一人称)
   allNames.forEach(n => dl.append(h("option", { value: n === s ? n + "(一人称)" : n })));
 }
 
+const vis = s => String(s).replace(/\{([^{}]*)\}\[[^\[\]]*\]/g, "$1").replace(/\[[^\[\]]*\]/g, ""); // 画面に見える文字だけ(検索用)
+function rich(str) { // 「{範囲}[注釈]」→ 範囲の文字列にツールチップ。{ }と[ ]自体は表示しない。{ }がなければ[ ]の直前の1文字
+  const frag = document.createDocumentFragment(), re = /(?:\{([^{}]*)\})?\[([^\[\]]*)\]/g;
+  let pos = 0, m, tt = null, ttEnd = -1;
+  while ((m = re.exec(str))) {
+    const range = m[1], tip = m[2].trim(), before = str.slice(pos, m.index);
+    if (range === undefined && tt && m.index === ttEnd) { // 連続する[ ]は、同じ範囲のツールチップにまとめる
+      if (tip) tt.dataset.tip += "\n" + tip;
+      pos = ttEnd = re.lastIndex; continue;
+    }
+    if (!tip) { frag.append(before + (range || "")); tt = null; pos = re.lastIndex; continue; } // 注釈が空: 記号だけ取り除く
+    if (range) { // {範囲}[注釈]
+      tt = h("span", { className: "tt", tabIndex: 0, textContent: range });
+      tt.dataset.tip = tip;
+      frag.append(before, tt);
+      pos = ttEnd = re.lastIndex; continue;
+    }
+    const chars = Array.from(before); // 範囲の指定なし: 直前の1文字(空白は飛ばす)
+    let k = chars.length - 1;
+    while (k >= 0 && /\s/.test(chars[k])) k--;
+    if (k < 0) { frag.append(chars.join("") + m[0]); tt = null; pos = re.lastIndex; continue; } // 付ける文字がなければそのまま表示
+    frag.append(chars.slice(0, k).join(""));
+    tt = h("span", { className: "tt", tabIndex: 0, textContent: chars[k] });
+    tt.dataset.tip = tip;
+    frag.append(tt, chars.slice(k + 1).join(""));
+    pos = ttEnd = re.lastIndex;
+  }
+  frag.append(str.slice(pos));
+  return frag;
+}
+function tipNodes(s) { // 【URL】をリンクにする(【】は表示しない。http/httpsのみ)
+  const frag = document.createDocumentFragment();
+  s.split(/【([^】]*)】/).forEach((p, i) => {
+    const u = p.trim();
+    if (i % 2 && /^https?:\/\/\S+$/.test(u)) frag.append(h("a", { href: u, target: "_blank", rel: "noopener noreferrer", textContent: u }));
+    else frag.append(p);
+  });
+  return frag;
+}
+let tipFor = null, tipTimer = 0, tipPinned = false, tipAt = 0;
+function showTip(tt, pin) {
+  clearTimeout(tipTimer);
+  const box = $("#tipBox");
+  if (tipFor !== tt) { box.replaceChildren(tipNodes(tt.dataset.tip)); tipFor = tt; }
+  box.hidden = false; box.style.left = "0"; box.style.top = "0";
+  tipPinned = !!pin; tipAt = Date.now();
+  const r = tt.getBoundingClientRect(), b = box.getBoundingClientRect();
+  let top = r.bottom + 4;
+  if (top + b.height > innerHeight - 8 && r.top - b.height - 4 > 8) top = r.top - b.height - 4;
+  box.style.left = Math.max(8, Math.min(r.left, innerWidth - b.width - 8)) + "px";
+  box.style.top = top + "px";
+  tt.setAttribute("aria-describedby", "tipBox");
+}
+function hideTip(now) {
+  clearTimeout(tipTimer);
+  const go = () => { $("#tipBox").hidden = true; if (tipFor) tipFor.removeAttribute("aria-describedby"); tipFor = null; tipPinned = false; };
+  if (now) go(); else tipTimer = setTimeout(go, 250);
+}
 function renderNotes(notes) { // 管理者からのコメントと更新履歴(シート「お知らせ」)
   const box = $("#notice");
   box.replaceChildren();
@@ -192,8 +255,8 @@ function nickCell(r, label) {
   const td = h("td", {}, );
   td.dataset.l = label;
   if (!r || (!r.n && !r.x)) { td.append(h("span", { className: "unk" }, UNK)); return td; }
-  if (r.n) td.append(r.n);
-  if (r.x) td.append(h("small", {}, "特例: " + r.x));
+  if (r.n) td.append(rich(r.n));
+  if (r.x) td.append(h("small", {}, "特例: ", rich(r.x)));
   return td;
 }
 
@@ -210,12 +273,12 @@ function speakerBlock(s, id, info, gOrder) {
     const tr = h("tr", {}, h("td", { textContent: self ? r.t + "(一人称)" : r.t }),
       nickCell(r, "呼び方(" + s + "→)"), revCell);
     tr.children[0].dataset.l = "相手";
-    tr.dataset.h = [r.n, r.x, rev && rev.n, rev && rev.x, r.note].filter(Boolean).join("\n").toLowerCase();
+    tr.dataset.h = [r.n, r.x, rev && rev.n, rev && rev.x, r.note].filter(Boolean).map(vis).join("\n").toLowerCase();
     tb.append(tr);
     if (r.note) { // 補足は、下に1行まるごと使って小さく表示する
       tr.className = "hn";
       const nr = h("tr", { className: "note" }, h("td", { colSpan: 3 },
-        h("div", { className: "nwrap" }, h("span", { className: "nlab" }, "補足"), h("span", { className: "ntx", textContent: r.note }))));
+        h("div", { className: "nwrap" }, h("span", { className: "nlab" }, "補足"), h("span", { className: "ntx" }, rich(r.note)))));
       nr.dataset.h = tr.dataset.h; // 検索では本来の行と一緒に表示・非表示にする
       tb.append(nr);
     }
@@ -315,6 +378,7 @@ function stepSpeaker(dir) { // 表示中の話し手を順に移動(見出しに
 }
 document.addEventListener("keydown", e => {
   if (e.isComposing) return;
+  if (e.key === "Escape" && !$("#tipBox").hidden) { hideTip(true); return; } // ツールチップが出ている間のEscは、それを閉じる
   const t = e.target, typing = /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable;
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { // 開いているフォームを送信
     const f = t.closest && t.closest("dialog[open] form");
@@ -338,6 +402,23 @@ document.addEventListener("keydown", e => {
 });
 $("#keysBtn").onclick = openKeys;
 $("#upBtn").onclick = closeOneLevel; // スマホ右下のボタン(キー u と同じ)
+const ttOf = e => e.target.closest && e.target.closest(".tt");
+const inTip = e => e.target.closest && e.target.closest("#tipBox");
+document.addEventListener("mouseover", e => { const tt = ttOf(e); if (tt) showTip(tt, false); else if (inTip(e)) clearTimeout(tipTimer); });
+document.addEventListener("mouseout", e => { if ((ttOf(e) || inTip(e)) && !tipPinned) hideTip(false); });
+document.addEventListener("focusin", e => { const tt = ttOf(e); if (tt) showTip(tt, tipPinned); else if (inTip(e)) clearTimeout(tipTimer); });
+document.addEventListener("focusout", e => { if ((ttOf(e) || inTip(e)) && !tipPinned) hideTip(false); });
+document.addEventListener("click", e => { // クリック/タップで固定(リンクを押せる)。もう一度押すか、外を押すと閉じる
+  const tt = ttOf(e);
+  if (tt) { if (tipFor === tt && tipPinned) hideTip(true); else showTip(tt, true); }
+  else if (!inTip(e)) hideTip(true);
+});
+document.addEventListener("keydown", e => { // キーボード: Enter/Spaceで固定し、リンクがあればそこへ移動
+  const tt = ttOf(e);
+  if (tt && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); showTip(tt, true); const a = $("#tipBox a"); if (a) a.focus(); }
+});
+addEventListener("scroll", () => { if (!$("#tipBox").hidden && Date.now() - tipAt > 250) hideTip(true); }, { passive: true });
+addEventListener("resize", () => hideTip(true));
 new ResizeObserver(() => document.documentElement.style.setProperty("--bar-h", $("#bar").offsetHeight + "px")).observe($("#bar"));
 $("#dKeys").addEventListener("change", e => {
   const k = e.target.dataset.k;
