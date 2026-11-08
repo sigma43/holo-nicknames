@@ -48,12 +48,15 @@ details{border:1px solid #222;margin-bottom:10px;scroll-margin-top:12px}
 details[hidden]{display:none}
 summary{cursor:pointer;padding:10px 12px;font-weight:700;background:var(--hd)}
 table{border-collapse:collapse;width:100%}
-th,td{border:1px solid #222;padding:8px 10px;text-align:left;vertical-align:top}
+th,td{border:1px solid #222;padding:8px 10px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
 thead th{background:var(--hd)}
 
 tr[hidden]{display:none}
 tr.grp th{background:#dcdcdc}
 tr.note td{font-size:.8rem;line-height:1.35;padding:2px 10px;color:#333}
+.nwrap{display:flex;gap:8px;align-items:flex-start}
+.nlab{flex:none;font-weight:700;border-right:1px solid #222;padding-right:8px}
+.ntx{min-width:0;overflow-wrap:anywhere}
 .unk{color:var(--mut)}
 small{display:block;color:#444}
 footer{padding:16px;font-size:.85rem;color:#555;border-top:1px solid #ccc}
@@ -146,6 +149,7 @@ dialog .chk input{width:auto}
   <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>次の話し手 / 前の話し手へ移動する(<kbd>Enter</kbd>で開閉)</td><td><label class="chk"><input type="checkbox" data-k="jk"> 有効</label></td></tr>
   <tr><td><kbd>e</kbd> / <kbd>c</kbd></td><td>グループと話し手をすべて開く / 閉じる</td><td><label class="chk"><input type="checkbox" data-k="ec"> 有効</label></td></tr>
   <tr><td><kbd>i</kbd></td><td>情報提供のフォームを開く</td><td><label class="chk"><input type="checkbox" data-k="i"> 有効</label></td></tr>
+  <tr><td><kbd>u</kbd></td><td>開いているアコーディオンを一段階だけ閉じる(話し手 → グループの順)</td><td><label class="chk"><input type="checkbox" data-k="up"> 有効</label></td></tr>
   <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>ページの先頭 / 末尾へ移動する</td><td><label class="chk"><input type="checkbox" data-k="he"> 有効</label></td></tr>
   <tr><td><kbd>Esc</kbd></td><td>サイドバー(メニュー)を開閉する</td><td>常に有効</td></tr>
   <tr><td><kbd>?</kbd></td><td>この一覧を表示する</td><td>常に有効</td></tr>
@@ -160,7 +164,7 @@ const API = "https://script.google.com/macros/s/AKfycbzTIBWENAVcqlKrbDNFCgsHSC9F
 const UNK = "(呼称未確認)";
 const $ = s => document.querySelector(s);
 const h = (t, p = {}, ...c) => { const e = document.createElement(t); Object.assign(e, p); e.append(...c); return e; };
-let rows = [], members = [], allNames = [], last = 0, cur = -1, keysCfg = { slash: true, jk: true, ec: true, i: true, he: true };
+let rows = [], members = [], allNames = [], last = 0, cur = -1, keysCfg = { slash: true, jk: true, ec: true, i: true, he: true, up: true };
 try { Object.assign(keysCfg, JSON.parse(localStorage.getItem("keysCfg") || "{}")); } catch (e) {}
 const URL_RE = /^https?:\/\/[^\s\/]+\.[^\s\/]+\S*$/;
 function fillT() { // 相手の候補: 話し手と同じ名前には(一人称)を付ける
@@ -207,7 +211,8 @@ function speakerBlock(s, id, info, gOrder) {
     tb.append(tr);
     if (r.note) { // 補足は、下に1行まるごと使って小さく表示する
       tr.className = "hn";
-      const nr = h("tr", { className: "note" }, h("td", { colSpan: 3, textContent: r.note }));
+      const nr = h("tr", { className: "note" }, h("td", { colSpan: 3 },
+        h("div", { className: "nwrap" }, h("span", { className: "nlab" }, "補足"), h("span", { className: "ntx", textContent: r.note }))));
       nr.dataset.h = tr.dataset.h; // 検索では本来の行と一緒に表示・非表示にする
       tb.append(nr);
     }
@@ -278,6 +283,20 @@ window.addEventListener("resize", syncMenu);
 syncMenu();
 $("#navClose").onclick = closeNav;
 document.addEventListener("click", e => { if (!e.target.closest("#nav, #menu")) closeNav(); });
+function closeOneLevel() { // 話し手が開いていればそれを、閉じていれば親のグループを閉じる
+  let d = document.activeElement && document.activeElement.closest ? document.activeElement.closest("#list details") : null;
+  if (!d) { // フォーカスがなければ、画面に見えている開いた話し手(なければグループ)
+    const inView = el => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; };
+    const open = [...document.querySelectorAll("#list details[open]:not([hidden])")].filter(inView);
+    d = open.find(x => x.classList.contains("sp")) || open[0];
+  }
+  if (!d) return;
+  const t = d.open ? d : d.closest(".grp-d");
+  if (!t || !t.open) return;
+  t.open = false;
+  t.firstElementChild.focus({ preventScroll: true });
+  t.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
 function openKeys() {
   document.querySelectorAll("#dKeys [data-k]").forEach(b => { b.checked = keysCfg[b.dataset.k]; });
   $("#dKeys").showModal();
@@ -309,6 +328,7 @@ document.addEventListener("keydown", e => {
   else if ((k === "j" || k === "k") && c.jk) stepSpeaker(k === "j" ? 1 : -1);
   else if ((k === "e" || k === "c") && c.ec) document.querySelectorAll("#list details:not([hidden])").forEach(d => { d.open = k === "e"; });
   else if (k === "i" && c.i) { e.preventDefault(); $("#dInfo").showModal(); }
+  else if (k === "u" && c.up) closeOneLevel();
   else if (k === "Home" && c.he) { e.preventDefault(); scrollTo({ top: 0, behavior: "smooth" }); }
   else if (k === "End" && c.he) { e.preventDefault(); scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }); }
 });
@@ -359,7 +379,7 @@ $("#q").addEventListener("input", e => {
     if (q) {
       mark(d.querySelector("summary"), q);
       d.querySelectorAll("tbody tr:not(.grp)").forEach(tr => {
-        if (tr.classList.contains("note")) mark(tr.children[0], q);
+        if (tr.classList.contains("note")) mark(tr.querySelector(".ntx"), q);
         else [1, 2].forEach(k => mark(tr.children[k], q));
       });
     }
