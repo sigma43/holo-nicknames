@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ホロライブ 二人称まとめ(非公式)</title>
+<style>
+:root{--hd:#bdbdbd;--alt:#f0f0f0;--mut:#8a8a8a;--ac:#1a56c4;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.6 "Hiragino Sans","Yu Gothic",system-ui,sans-serif;color:#111;background:#fff}
+button,input,select,textarea{font:inherit}
+.btn{padding:6px 12px;border:1px solid #222;background:#fff;border-radius:4px;cursor:pointer}
+.btn:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+header{padding:10px 16px;border-bottom:1px solid #ccc}
+header h1{font-size:1.15rem;margin:0 0 2px}
+header p{margin:0;font-size:.85rem;color:#555}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.bar input{flex:1;min-width:160px;padding:6px 8px;border:1px solid #888;border-radius:4px}
+#menu{display:none}
+.wrap{display:flex;align-items:flex-start}
+nav{width:220px;flex:none;position:sticky;top:0;max-height:100vh;overflow:auto;padding:12px;border-right:1px solid #ccc}
+nav a{display:block;padding:6px 4px;color:var(--ac);text-decoration:none}
+nav a[hidden]{display:none}
+main{flex:1;min-width:0;padding:16px;max-width:980px}
+details{border:1px solid #222;margin-bottom:10px;scroll-margin-top:12px}
+details[hidden]{display:none}
+summary{cursor:pointer;padding:10px 12px;font-weight:700;background:var(--hd)}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #222;padding:8px 10px;text-align:left;vertical-align:top}
+thead th{background:var(--hd)}
+tbody tr:nth-child(even) td{background:var(--alt)}
+tr[hidden]{display:none}
+tr.grp th{background:#dcdcdc}
+.unk{color:var(--mut)}
+small{display:block;color:#444}
+footer{padding:16px;font-size:.85rem;color:#555;border-top:1px solid #ccc}
+dialog{width:min(560px,94vw);border:1px solid #222;padding:16px}
+dialog label{display:block;margin-top:10px;font-weight:700}
+dialog label span{font-weight:400;color:#555;font-size:.85rem}
+dialog input,dialog select,dialog textarea{width:100%;padding:6px 8px;border:1px solid #888;border-radius:4px}
+dialog .chk{font-weight:400}
+dialog .chk input{width:auto}
+.hp{position:absolute;left:-9999px}
+.msg{margin:10px 0 0;min-height:1.4em}
+.row{display:flex;gap:8px;margin-top:14px}
+@media(max-width:760px){
+ #menu{display:inline-block}
+ nav{display:none;position:fixed;inset:0 25% 0 0;z-index:5;background:#fff;max-height:none;border-right:1px solid #222}
+ nav.open{display:block}
+ thead{display:none}
+ table,tbody,tr,td,th{display:block;width:100%}
+ tr{border-bottom:1px solid #222}
+ td,th{border:0;border-bottom:1px solid #ddd}
+ td[data-l]::before{content:attr(data-l);display:block;font-size:.8rem;color:#555}
+ tr.grp th{border:0}
+}
+</style>
+</head>
+<body>
+<header>
+ <h1>ホロライブ 二人称まとめ</h1>
+ <p>非公式・非営利のファンサイトです。公式とは関係ありません。</p>
+ <div class="bar">
+  <button class="btn" id="menu" type="button">話し手一覧</button>
+  <input id="q" type="search" placeholder="話し手・相手の名前で絞り込み" aria-label="絞り込み">
+  <button class="btn" data-open="dInfo" type="button">情報提供</button>
+  <button class="btn" data-open="dFb" type="button">ご意見・要望</button>
+ </div>
+</header>
+<div class="wrap">
+ <nav id="nav" aria-label="話し手一覧"></nav>
+ <main id="list">読み込み中…</main>
+</div>
+<footer>掲載内容は有志の確認によるもので、正確さを保証するものではありません。限定配信など、有料コンテンツから得た情報は掲載しません。</footer>
+
+<dialog id="dInfo">
+ <form id="fInfo">
+  <h2>情報提供</h2>
+  <label>種類
+   <select name="type" required><option>新規追加</option><option>内容の修正</option><option>削除の依頼</option></select></label>
+  <label>話し手(呼ぶ側)<input name="s" list="names" required maxlength="50"></label>
+  <label>相手(呼ばれる側)<input name="t" list="names" required maxlength="50"></label>
+  <label>二人称 <span>複数ある場合は「、」で区切る</span><input name="n" required maxlength="200"></label>
+  <label>特例の二人称 <span>任意</span><input name="x" maxlength="200"></label>
+  <label>補足 <span>任意・場面や条件など</span><textarea name="note" rows="2" maxlength="1000"></textarea></label>
+  <label>出典の配信日<input name="date" type="date" required></label>
+  <label>出典の動画URL<input name="url" type="url" required maxlength="300" placeholder="https://"></label>
+  <label>出典の時間 <span>任意・例 12:34</span><input name="time" maxlength="20"></label>
+  <label>連絡先 <span>任意・確認が必要な場合のみ使用します</span><input name="contact" maxlength="200"></label>
+  <label class="chk"><input type="checkbox" name="ok" required> メンバーシップ限定など、有料の限定配信から得た情報ではありません</label>
+  <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+  <p class="msg" role="status"></p>
+  <div class="row"><button class="btn" type="submit">送信する</button><button class="btn" type="button" data-close>閉じる</button></div>
+ </form>
+ <datalist id="names"></datalist>
+</dialog>
+
+<dialog id="dFb">
+ <form id="fFb">
+  <h2>ご意見・要望</h2>
+  <label>種類
+   <select name="type" required><option>不具合の報告</option><option>表示や機能の要望</option><option>掲載内容の指摘</option><option>その他</option></select></label>
+  <label>内容<textarea name="body" rows="5" required maxlength="1000"></textarea></label>
+  <label>連絡先 <span>任意・返信が必要な場合のみ使用します</span><input name="contact" maxlength="200"></label>
+  <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+  <p class="msg" role="status"></p>
+  <div class="row"><button class="btn" type="submit">送信する</button><button class="btn" type="button" data-close>閉じる</button></div>
+ </form>
+</dialog>
+
+<script>
+// ★ GASをデプロイして得た「ウェブアプリのURL」をここに貼る
+const API = "https://script.google.com/macros/s/AKfycbzTIBWENAVcqlKrbDNFCgsHSC9FOBix5bFmald-nJDZrj9fGUUpe1_YK59fMdop1C-C-w/exec";
+const UNK = "(呼称未確認)";
+const $ = s => document.querySelector(s);
+const h = (t, p = {}, ...c) => { const e = document.createElement(t); Object.assign(e, p); e.append(...c); return e; };
+let rows = [], last = 0;
+
+function nickCell(r, label) {
+  const td = h("td", {}, );
+  td.dataset.l = label;
+  if (!r || (!r.n && !r.x)) { td.append(h("span", { className: "unk" }, UNK)); return td; }
+  if (r.n) td.append(r.n);
+  if (r.x) td.append(h("small", {}, "特例: " + r.x));
+  return td;
+}
+
+function render() {
+  const speakers = [...new Set(rows.map(r => r.s))];
+  const nav = $("#nav"), list = $("#list");
+  nav.replaceChildren(); list.replaceChildren();
+  if (!speakers.length) { list.textContent = "まだデータがありません。"; return; }
+  speakers.forEach((s, i) => {
+    nav.append(h("a", { href: "#sp" + i, textContent: s }));
+    const tb = h("tbody");
+    const mine = rows.filter(r => r.s === s);
+    const gs = [...new Set(mine.map(r => r.g))];
+    gs.flatMap(g => [g, ...mine.filter(r => r.g === g)]).forEach(r => {
+      if (typeof r === "string") { if (r) tb.append(h("tr", { className: "grp" }, h("th", { colSpan: 4 }, r))); return; }
+      const rev = rows.find(x => x.s === r.t && x.t === r.s);
+      const tr = h("tr", {}, h("td", { textContent: r.t }),
+        nickCell(r, "呼び方(" + s + "→)"), nickCell(rev, "呼ばれ方(" + s + "←)"), h("td", { textContent: r.note }));
+      tr.children[0].dataset.l = "相手"; tr.children[3].dataset.l = "補足";
+      tr.dataset.t = r.t;
+      tb.append(tr);
+    });
+    const th = h("thead", {}, h("tr", {}, h("th", {}, "相手"), h("th", {}, "呼び方 " + s + "→"), h("th", {}, "呼ばれ方 " + s + "←"), h("th", {}, "補足")));
+    const d = h("details", { id: "sp" + i }, h("summary", {}, s), h("table", {}, th, tb));
+    d.dataset.s = s;
+    list.append(d);
+  });
+  const dl = $("#names"); dl.replaceChildren();
+  [...new Set(rows.flatMap(r => [r.s, r.t]))].forEach(n => dl.append(h("option", { value: n })));
+}
+
+function go(id) {
+  const d = document.getElementById(id);
+  if (!d) return;
+  d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#nav").classList.remove("open");
+}
+$("#nav").addEventListener("click", e => {
+  const a = e.target.closest("a"); if (!a) return;
+  e.preventDefault(); go(a.getAttribute("href").slice(1));
+});
+$("#menu").onclick = () => $("#menu").setAttribute("aria-expanded", $("#nav").classList.toggle("open"));
+
+$("#q").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll("details").forEach((d, i) => {
+    const sm = d.dataset.s.toLowerCase().includes(q);
+    let n = 0;
+    d.querySelectorAll("tbody tr").forEach(tr => {
+      const grp = tr.classList.contains("grp");
+      const hit = !q || sm || (!grp && tr.dataset.t.toLowerCase().includes(q));
+      tr.hidden = grp ? !!q : !hit;
+      if (hit && !grp) n++;
+    });
+    let vis = false;
+    [...d.querySelectorAll("tbody tr")].reverse().forEach(tr => {
+      if (tr.classList.contains("grp")) { tr.hidden = !!q && !vis; vis = false; }
+      else if (!tr.hidden) vis = true;
+    });
+    d.hidden = !!q && !n;
+    d.open = !!q && n > 0;
+    $("#nav").children[i].hidden = d.hidden;
+  });
+});
+
+document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => document.getElementById(b.dataset.open).showModal());
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+
+async function send(form, kind) {
+  const msg = form.querySelector(".msg"), btn = form.querySelector("[type=submit]");
+  if (btn.disabled) return;
+  if (Date.now() - last < 10000) { msg.textContent = "少し待ってから、もう一度送信してください。"; return; }
+  const d = Object.fromEntries(new FormData(form));
+  d.kind = kind; d.ok = form.elements.ok ? form.elements.ok.checked : true;
+  btn.disabled = true; msg.textContent = "送信中…";
+  try {
+    const r = await fetch(API, { method: "POST", body: JSON.stringify(d) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    last = Date.now();
+    msg.textContent = "送信しました。ありがとうございます。";
+    const keep = form.elements.s ? form.elements.s.value : "";
+    form.reset();
+    if (form.elements.s) form.elements.s.value = keep; // 続けて入力できるよう話し手を残す
+  } catch (err) {
+    msg.textContent = "送信できませんでした。入力内容を確認し、時間をおいて再度お試しください。";
+  } finally { btn.disabled = false; }
+}
+$("#fInfo").addEventListener("submit", e => { e.preventDefault(); send(e.target, "info"); });
+$("#fFb").addEventListener("submit", e => { e.preventDefault(); send(e.target, "fb"); });
+
+document.querySelectorAll("form").forEach(f => f.addEventListener("input", () => { f.querySelector(".msg").textContent = ""; }));
+fetch(API).then(r => r.json()).then(j => { if (j.error) throw new Error(j.error); rows = j.rows; render(); })
+  .catch(() => { $("#list").textContent = "データを読み込めませんでした。時間をおいて再読み込みしてください。"; });
+</script>
+</body>
+</html>
