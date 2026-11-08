@@ -53,6 +53,7 @@ thead th{background:var(--hd)}
 
 tr[hidden]{display:none}
 tr.grp th{background:#dcdcdc}
+tr.note td{font-size:.8rem;line-height:1.35;padding:2px 10px;color:#333}
 .unk{color:var(--mut)}
 small{display:block;color:#444}
 footer{padding:16px;font-size:.85rem;color:#555;border-top:1px solid #ccc}
@@ -77,6 +78,7 @@ dialog .chk input{width:auto}
  td,th{border:0;border-bottom:1px solid #ddd}
  td[data-l]::before{content:attr(data-l);display:block;font-size:.8rem;color:#555}
  tr.grp th{border:0}
+ tr.hn{border-bottom:0}
 }
 </style>
 </head>
@@ -193,18 +195,24 @@ function speakerBlock(s, id, info, gOrder) {
   const mine = rows.filter(r => r.s === s);
   const gs = gOrder.filter(g => mine.some(r => r.g === g)); // 相手のグループ順(名前管理の順)。未登録の相手は見出しなしで先頭
   gs.flatMap(g => [g, ...mine.filter(r => r.g === g)]).forEach(r => {
-    if (typeof r === "string") { if (r) tb.append(h("tr", { className: "grp" }, h("th", { colSpan: 4 }, r))); return; }
+    if (typeof r === "string") { if (r) tb.append(h("tr", { className: "grp" }, h("th", { colSpan: 3 }, r))); return; }
     const self = r.t === r.s; // 話し手と相手が同じ=一人称
     const rev = self ? null : rows.find(x => x.s === r.t && x.t === r.s);
     const revCell = self ? h("td", { textContent: "-" }) : nickCell(rev, "呼ばれ方(" + s + "←)");
     if (self) revCell.dataset.l = "呼ばれ方(" + s + "←)";
     const tr = h("tr", {}, h("td", { textContent: self ? r.t + "(一人称)" : r.t }),
-      nickCell(r, "呼び方(" + s + "→)"), revCell, h("td", { textContent: r.note }));
-    tr.children[0].dataset.l = "相手"; tr.children[3].dataset.l = "補足";
+      nickCell(r, "呼び方(" + s + "→)"), revCell);
+    tr.children[0].dataset.l = "相手";
     tr.dataset.h = [r.n, r.x, rev && rev.n, rev && rev.x, r.note].filter(Boolean).join("\n").toLowerCase();
     tb.append(tr);
+    if (r.note) { // 補足は、下に1行まるごと使って小さく表示する
+      tr.className = "hn";
+      const nr = h("tr", { className: "note" }, h("td", { colSpan: 3, textContent: r.note }));
+      nr.dataset.h = tr.dataset.h; // 検索では本来の行と一緒に表示・非表示にする
+      tb.append(nr);
+    }
   });
-  const th = h("thead", {}, h("tr", {}, h("th", {}, "相手"), h("th", {}, "呼び方 " + s + "→"), h("th", {}, "呼ばれ方 " + s + "←"), h("th", {}, "補足")));
+  const th = h("thead", {}, h("tr", {}, h("th", {}, "相手"), h("th", {}, "呼び方 " + s + "→"), h("th", {}, "呼ばれ方 " + s + "←")));
   // 見出しだけ絵文字つきの名前(名前管理のC列)。それ以外は名前のみ
   const d = h("details", { id, className: "sp" }, h("summary", {}, (info[s] && info[s].label) || s), h("table", {}, th, tb));
   d.dataset.s = s;
@@ -350,7 +358,10 @@ $("#q").addEventListener("input", e => {
     navLink(d.id).hidden = d.hidden;
     if (q) {
       mark(d.querySelector("summary"), q);
-      d.querySelectorAll("tbody tr:not(.grp)").forEach(tr => [1, 2, 3].forEach(k => mark(tr.children[k], q)));
+      d.querySelectorAll("tbody tr:not(.grp)").forEach(tr => {
+        if (tr.classList.contains("note")) mark(tr.children[0], q);
+        else [1, 2].forEach(k => mark(tr.children[k], q));
+      });
     }
   });
   document.querySelectorAll("#list .grp-d").forEach(g => { // 該当する話し手がないグループは隠す
