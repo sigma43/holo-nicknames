@@ -11,12 +11,12 @@ body{margin:0;font:16px/1.6 "Hiragino Sans","Yu Gothic",system-ui,sans-serif;col
 button,input,select,textarea{font:inherit}
 .btn{padding:6px 12px;border:1px solid #222;background:#fff;border-radius:4px;cursor:pointer}
 .btn:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
-header{padding:10px 16px;border-bottom:1px solid #ccc}
+header{padding:10px 16px 0}
 header h1{font-size:1.15rem;margin:0 0 2px}
-header p{margin:0;font-size:.85rem;color:#555}
-.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+header p{margin:0 0 6px;font-size:.85rem;color:#555}
+.bar{position:sticky;top:0;z-index:20;background:#fff;display:flex;gap:8px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid #ccc}
 .bar input{flex:1;min-width:160px;padding:6px 8px;border:1px solid #888;border-radius:4px}
-#navClose,#navActions{display:none}
+#navClose,#navActions,#upBtn{display:none}
 #menu{font-size:1.25rem;line-height:1;padding:6px 12px}
 nav.shut{display:none}
 .lnk{background:none;border:0;padding:0;color:var(--ac);text-decoration:underline;cursor:pointer;font:inherit}
@@ -40,11 +40,11 @@ mark{background:#ffe066;color:#111}
 nav a.ng{font-weight:700;margin-top:6px}
 nav a.nm{padding-left:16px}
 .wrap{display:flex;align-items:flex-start}
-nav{width:220px;flex:none;position:sticky;top:0;max-height:100vh;overflow:auto;padding:12px;border-right:1px solid #ccc}
+nav{width:220px;flex:none;position:sticky;top:var(--bar-h,56px);max-height:calc(100vh - var(--bar-h,56px));overflow:auto;padding:12px;border-right:1px solid #ccc}
 nav a{display:block;padding:6px 4px;color:var(--ac);text-decoration:none}
 nav a[hidden]{display:none}
 main{flex:1;min-width:0;padding:16px;max-width:980px}
-details{border:1px solid #222;margin-bottom:10px;scroll-margin-top:12px}
+details{border:1px solid #222;margin-bottom:10px;scroll-margin-top:calc(var(--bar-h,56px) + 8px)}
 details[hidden]{display:none}
 summary{cursor:pointer;padding:10px 12px;font-weight:700;background:var(--hd)}
 table{border-collapse:collapse;width:100%}
@@ -73,7 +73,9 @@ dialog .chk input{width:auto}
  #navClose{display:inline-block;margin-bottom:8px}
  #navActions{display:flex;gap:8px;flex-wrap:wrap;padding-bottom:10px;margin-bottom:8px;border-bottom:1px solid #ccc}
  .pc-only{display:none}
- nav{display:none;position:fixed;inset:0 25% 0 0;z-index:5;background:#fff;max-height:none;border-right:1px solid #222}
+ #upBtn{display:block;position:fixed;right:16px;bottom:16px;z-index:15;padding:10px 16px;border-radius:999px;background:#222;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+ body{padding-bottom:72px}
+ nav{display:none;position:fixed;inset:var(--bar-h,56px) 25% 0 0;z-index:5;background:#fff;max-height:none;border-right:1px solid #222}
  nav.open{display:block}
  thead{display:none}
  table,tbody,tr,td,th{display:block;width:100%}
@@ -89,13 +91,13 @@ dialog .chk input{width:auto}
 <header>
  <h1>ホロライブ 二人称まとめ</h1>
  <p>非公式・非営利のファンサイトです。公式とは関係ありません。</p>
- <div class="bar">
+</header>
+<div class="bar" id="bar">
   <button class="btn" id="menu" type="button" aria-label="メニュー" aria-expanded="true" aria-controls="nav" title="メニュー(Esc)">☰</button>
   <input id="q" type="search" placeholder="話し手・二人称・補足で絞り込み" aria-label="絞り込み">
   <button class="btn pc-only" data-open="dInfo" type="button">情報提供</button>
   <button class="btn pc-only" data-open="dFb" type="button">ご意見・要望</button>
- </div>
-</header>
+</div>
 <div class="wrap">
  <nav id="nav" aria-label="話し手一覧"><button class="btn" id="navClose" type="button">閉じる</button><div id="navActions"><button class="btn" data-open="dInfo" type="button">情報提供</button><button class="btn" data-open="dFb" type="button">ご意見・要望</button></div><div id="navList"></div></nav>
  <main><section id="notice" hidden aria-labelledby="noticeT"></section><div id="list">読み込み中…</div></main>
@@ -106,6 +108,7 @@ dialog .chk input{width:auto}
  <p>ご意見・ご要望、不具合のご報告は、<button class="lnk" data-open="dFb" type="button">ご意見・要望</button>よりお送りください。</p>
  <p class="pc-only"><button class="lnk" id="keysBtn" type="button">キーボード操作</button>の一覧は、<kbd>?</kbd>キーでも開けます。</p>
 </footer>
+<button class="btn" id="upBtn" type="button" aria-label="開いている項目を一段階だけ閉じる">▲ 一段階閉じる</button>
 
 <dialog id="dInfo">
  <form id="fInfo">
@@ -288,7 +291,8 @@ function closeOneLevel() { // 話し手が開いていればそれを、閉じ�
   if (!d) { // フォーカスがなければ、画面に見えている開いた話し手(なければグループ)
     const inView = el => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; };
     const open = [...document.querySelectorAll("#list details[open]:not([hidden])")].filter(inView);
-    d = open.find(x => x.classList.contains("sp")) || open[0];
+    const mid = innerHeight / 2, sps = open.filter(x => x.classList.contains("sp"));
+    d = sps.find(x => { const r = x.getBoundingClientRect(); return r.top <= mid && r.bottom >= mid; }) || sps[0] || open[0];
   }
   if (!d) return;
   const t = d.open ? d : d.closest(".grp-d");
@@ -333,6 +337,8 @@ document.addEventListener("keydown", e => {
   else if (k === "End" && c.he) { e.preventDefault(); scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }); }
 });
 $("#keysBtn").onclick = openKeys;
+$("#upBtn").onclick = closeOneLevel; // スマホ右下のボタン(キー u と同じ)
+new ResizeObserver(() => document.documentElement.style.setProperty("--bar-h", $("#bar").offsetHeight + "px")).observe($("#bar"));
 $("#dKeys").addEventListener("change", e => {
   const k = e.target.dataset.k;
   if (!k) return;
