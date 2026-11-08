@@ -34,7 +34,11 @@ kbd{border:1px solid #888;border-radius:3px;padding:0 5px;background:#f6f6f6;fon
 .nd{font-size:.8rem;color:#555}
 .nc{white-space:pre-wrap;overflow-wrap:anywhere}
 .log{max-height:12em;overflow:auto}
-mark{background:#ffe066;color:inherit}
+mark{background:#ffe066;color:#111}
+.grp-d>summary{background:#555;color:#fff}
+.gbody{padding:8px}
+nav a.ng{font-weight:700;margin-top:6px}
+nav a.nm{padding-left:16px}
 .wrap{display:flex;align-items:flex-start}
 nav{width:220px;flex:none;position:sticky;top:0;max-height:100vh;overflow:auto;padding:12px;border-right:1px solid #ccc}
 nav a{display:block;padding:6px 4px;color:var(--ac);text-decoration:none}
@@ -138,7 +142,7 @@ dialog .chk input{width:auto}
  <table><tbody>
   <tr><td><kbd>/</kbd></td><td>検索窓に移動する</td><td><label class="chk"><input type="checkbox" data-k="slash"> 有効</label></td></tr>
   <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>次の話し手 / 前の話し手へ移動する(<kbd>Enter</kbd>で開閉)</td><td><label class="chk"><input type="checkbox" data-k="jk"> 有効</label></td></tr>
-  <tr><td><kbd>e</kbd> / <kbd>c</kbd></td><td>すべての話し手を開く / 閉じる</td><td><label class="chk"><input type="checkbox" data-k="ec"> 有効</label></td></tr>
+  <tr><td><kbd>e</kbd> / <kbd>c</kbd></td><td>グループと話し手をすべて開く / 閉じる</td><td><label class="chk"><input type="checkbox" data-k="ec"> 有効</label></td></tr>
   <tr><td><kbd>i</kbd></td><td>情報提供のフォームを開く</td><td><label class="chk"><input type="checkbox" data-k="i"> 有効</label></td></tr>
   <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>ページの先頭 / 末尾へ移動する</td><td><label class="chk"><input type="checkbox" data-k="he"> 有効</label></td></tr>
   <tr><td><kbd>Esc</kbd></td><td>サイドバー(メニュー)を開閉する</td><td>常に有効</td></tr>
@@ -154,7 +158,7 @@ const API = "https://script.google.com/macros/s/AKfycbzTIBWENAVcqlKrbDNFCgsHSC9F
 const UNK = "(呼称未確認)";
 const $ = s => document.querySelector(s);
 const h = (t, p = {}, ...c) => { const e = document.createElement(t); Object.assign(e, p); e.append(...c); return e; };
-let rows = [], allNames = [], last = 0, cur = -1, keysCfg = { slash: true, jk: true, ec: true, i: true, he: true };
+let rows = [], members = [], allNames = [], last = 0, cur = -1, keysCfg = { slash: true, jk: true, ec: true, i: true, he: true };
 try { Object.assign(keysCfg, JSON.parse(localStorage.getItem("keysCfg") || "{}")); } catch (e) {}
 const URL_RE = /^https?:\/\/[^\s\/]+\.[^\s\/]+\S*$/;
 function fillT() { // 相手の候補: 話し手と同じ名前には(一人称)を付ける
@@ -184,45 +188,73 @@ function nickCell(r, label) {
   return td;
 }
 
+function speakerBlock(s, id, info, gOrder) {
+  const tb = h("tbody");
+  const mine = rows.filter(r => r.s === s);
+  const gs = gOrder.filter(g => mine.some(r => r.g === g)); // 相手のグループ順(名前管理の順)。未登録の相手は見出しなしで先頭
+  gs.flatMap(g => [g, ...mine.filter(r => r.g === g)]).forEach(r => {
+    if (typeof r === "string") { if (r) tb.append(h("tr", { className: "grp" }, h("th", { colSpan: 4 }, r))); return; }
+    const self = r.t === r.s; // 話し手と相手が同じ=一人称
+    const rev = self ? null : rows.find(x => x.s === r.t && x.t === r.s);
+    const revCell = self ? h("td", { textContent: "-" }) : nickCell(rev, "呼ばれ方(" + s + "←)");
+    if (self) revCell.dataset.l = "呼ばれ方(" + s + "←)";
+    const tr = h("tr", {}, h("td", { textContent: self ? r.t + "(一人称)" : r.t }),
+      nickCell(r, "呼び方(" + s + "→)"), revCell, h("td", { textContent: r.note }));
+    tr.children[0].dataset.l = "相手"; tr.children[3].dataset.l = "補足";
+    tr.dataset.h = [r.n, r.x, rev && rev.n, rev && rev.x, r.note].filter(Boolean).join("\n").toLowerCase();
+    tb.append(tr);
+  });
+  const th = h("thead", {}, h("tr", {}, h("th", {}, "相手"), h("th", {}, "呼び方 " + s + "→"), h("th", {}, "呼ばれ方 " + s + "←"), h("th", {}, "補足")));
+  // 見出しだけ絵文字つきの名前(名前管理のC列)。それ以外は名前のみ
+  const d = h("details", { id, className: "sp" }, h("summary", {}, (info[s] && info[s].label) || s), h("table", {}, th, tb));
+  d.dataset.s = s;
+  return d;
+}
+
 function render() {
-  const speakers = [...new Set(rows.map(r => r.s))];
   const nav = $("#navList"), list = $("#list");
   nav.replaceChildren(); list.replaceChildren();
+  const speakers = [...new Set(rows.map(r => r.s))];
   if (!speakers.length) { list.textContent = "まだデータがありません。"; return; }
-  speakers.forEach((s, i) => {
-    nav.append(h("a", { href: "#sp" + i, textContent: s }));
-    const tb = h("tbody");
-    const mine = rows.filter(r => r.s === s);
-    const gs = [...new Set(mine.map(r => r.g))];
-    gs.flatMap(g => [g, ...mine.filter(r => r.g === g)]).forEach(r => {
-      if (typeof r === "string") { if (r) tb.append(h("tr", { className: "grp" }, h("th", { colSpan: 4 }, r))); return; }
-      const self = r.t === r.s; // 話し手と相手が同じ=一人称
-      const rev = self ? null : rows.find(x => x.s === r.t && x.t === r.s);
-      const revCell = self ? h("td", { textContent: "-" }) : nickCell(rev, "呼ばれ方(" + s + "←)");
-      if (self) revCell.dataset.l = "呼ばれ方(" + s + "←)";
-      const tr = h("tr", {}, h("td", { textContent: self ? r.t + "(一人称)" : r.t }),
-        nickCell(r, "呼び方(" + s + "→)"), revCell, h("td", { textContent: r.note }));
-      tr.children[0].dataset.l = "相手"; tr.children[3].dataset.l = "補足";
-      tr.dataset.h = [r.n, r.x, rev && rev.n, rev && rev.x, r.note].filter(Boolean).join("\n").toLowerCase();
-      tb.append(tr);
+  const info = {};
+  members.forEach(m => { info[m.name] = m; });
+  const groups = []; // 名前管理の順。名前管理にない話し手は「その他」
+  const put = (g, s) => { let o = groups.find(x => x.name === g); if (!o) groups.push(o = { name: g, speakers: [] }); o.speakers.push(s); };
+  members.forEach(m => { if (speakers.includes(m.name)) put(m.g || "その他", m.name); });
+  speakers.filter(s => !info[s]).forEach(s => put("その他", s));
+  const gOrder = ["", ...new Set(members.map(m => m.g).filter(Boolean))];
+  const navA = (id, text, cls) => { const a = h("a", { href: "#" + id, className: cls, textContent: text }); a.dataset.for = id; nav.append(a); };
+  let si = 0;
+  groups.forEach((G, gi) => {
+    navA("g" + gi, G.name, "ng");
+    const body = h("div", { className: "gbody" });
+    G.speakers.forEach(s => {
+      const id = "sp" + si++;
+      navA(id, s, "nm");
+      body.append(speakerBlock(s, id, info, gOrder));
     });
-    const th = h("thead", {}, h("tr", {}, h("th", {}, "相手"), h("th", {}, "呼び方 " + s + "→"), h("th", {}, "呼ばれ方 " + s + "←"), h("th", {}, "補足")));
-    const d = h("details", { id: "sp" + i }, h("summary", {}, s), h("table", {}, th, tb));
-    d.dataset.s = s;
-    list.append(d);
+    list.append(h("details", { id: "g" + gi, className: "grp-d" }, h("summary", {}, G.name), body));
   });
-  allNames = [...new Set(rows.flatMap(r => [r.s, r.t]))];
+  allNames = [...new Set([...members.map(m => m.name), ...rows.flatMap(r => [r.s, r.t])])];
   const dl = $("#names"); dl.replaceChildren();
   allNames.forEach(n => dl.append(h("option", { value: n })));
   fillT();
 }
 
+const navLink = id => $("#navList").querySelector(`[data-for="${id}"]`);
 function go(id) {
   const d = document.getElementById(id);
   if (!d) return;
-  cur = [...document.querySelectorAll("details:not([hidden])")].indexOf(d);
-  if (d.open) d.open = false;
-  else { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (d.classList.contains("sp")) { // 話し手: 親のグループを開き、開いていれば閉じる
+    const g = d.closest(".grp-d"), gOpen = g.open;
+    g.open = true;
+    cur = [...document.querySelectorAll("#list .sp:not([hidden])")].indexOf(d);
+    if (d.open && gOpen) d.open = false;
+    else { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  } else { // グループ: 開閉する
+    d.open = !d.open;
+    if (d.open) d.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   closeNav();
 }
 const isMobile = () => matchMedia("(max-width:760px)").matches;
@@ -243,9 +275,10 @@ function openKeys() {
   $("#dKeys").showModal();
 }
 function stepSpeaker(dir) { // 表示中の話し手を順に移動(見出しにフォーカスするのでEnterで開閉できる)
-  const ds = [...document.querySelectorAll("details:not([hidden])")];
+  const ds = [...document.querySelectorAll("#list .sp:not([hidden])")];
   if (!ds.length) return;
   cur = Math.max(0, Math.min(ds.length - 1, cur + dir));
+  ds[cur].closest(".grp-d").open = true;
   ds[cur].scrollIntoView({ behavior: "smooth", block: "start" });
   ds[cur].querySelector("summary").focus({ preventScroll: true });
 }
@@ -297,7 +330,7 @@ function mark(el, q) {
 }
 $("#q").addEventListener("input", e => {
   const q = e.target.value.trim().toLowerCase();
-  document.querySelectorAll("details").forEach((d, i) => {
+  document.querySelectorAll("#list .sp").forEach(d => {
     const sm = d.dataset.s.toLowerCase().includes(q);
     unmark(d);
     let n = 0;
@@ -314,11 +347,17 @@ $("#q").addEventListener("input", e => {
     });
     d.hidden = !!q && !n;
     d.open = !!q && n > 0;
-    $("#navList").children[i].hidden = d.hidden;
+    navLink(d.id).hidden = d.hidden;
     if (q) {
       mark(d.querySelector("summary"), q);
       d.querySelectorAll("tbody tr:not(.grp)").forEach(tr => [1, 2, 3].forEach(k => mark(tr.children[k], q)));
     }
+  });
+  document.querySelectorAll("#list .grp-d").forEach(g => { // 該当する話し手がないグループは隠す
+    const any = g.querySelector(".sp:not([hidden])");
+    g.hidden = !!q && !any;
+    g.open = !!q && !!any;
+    navLink(g.id).hidden = g.hidden;
   });
 });
 
@@ -352,7 +391,7 @@ $("#fFb").addEventListener("submit", e => { e.preventDefault(); send(e.target, "
 $("#fInfo").elements.s.addEventListener("input", fillT);
 
 document.querySelectorAll("form").forEach(f => f.addEventListener("input", () => { f.querySelector(".msg").textContent = ""; }));
-fetch(API).then(r => r.json()).then(j => { if (j.error) throw new Error(j.error); rows = j.rows; render(); renderNotes(j.notes || []); })
+fetch(API).then(r => r.json()).then(j => { if (j.error) throw new Error(j.error); rows = j.rows; members = j.members || []; render(); renderNotes(j.notes || []); })
   .catch(() => { $("#list").textContent = "データを読み込めませんでした。時間をおいて再読み込みしてください。"; });
 </script>
 </body>
