@@ -25,6 +25,15 @@ footer p{margin:0 0 4px}
 kbd{border:1px solid #888;border-radius:3px;padding:0 5px;background:#f6f6f6;font:inherit;font-size:.9em}
 #dKeys table{margin-top:10px}
 #dKeys th,#dKeys td{padding:4px 8px}
+#dKeys td label{margin:0}
+#notice{border:1px solid #222;padding:8px 12px;margin-bottom:16px}
+#notice h2{font-size:1rem;margin:0 0 4px}
+#notice h3{font-size:.9rem;margin:10px 0 4px;background:var(--hd);padding:2px 8px}
+.nt{padding:4px 0;border-bottom:1px solid #ddd}
+.nt:last-child{border-bottom:0}
+.nd{font-size:.8rem;color:#555}
+.nc{white-space:pre-wrap;overflow-wrap:anywhere}
+.log{max-height:12em;overflow:auto}
 mark{background:#ffe066;color:inherit}
 .wrap{display:flex;align-items:flex-start}
 nav{width:220px;flex:none;position:sticky;top:0;max-height:100vh;overflow:auto;padding:12px;border-right:1px solid #ccc}
@@ -80,12 +89,12 @@ dialog .chk input{width:auto}
 </header>
 <div class="wrap">
  <nav id="nav" aria-label="話し手一覧"><button class="btn" id="navClose" type="button">閉じる</button><div id="navActions"><button class="btn" data-open="dInfo" type="button">情報提供</button><button class="btn" data-open="dFb" type="button">ご意見・要望</button></div><div id="navList"></div></nav>
- <main id="list">読み込み中…</main>
+ <main><section id="notice" hidden aria-labelledby="noticeT"></section><div id="list">読み込み中…</div></main>
 </div>
 <footer>
  <p>掲載内容は有志の確認によるもので、正確さを保証するものではありません。限定配信など、有料コンテンツから得た情報は掲載しません。</p>
- <p>載っていない呼び方を知っていたら、<button class="lnk" data-open="dInfo" type="button">情報提供</button>から教えてください。</p>
- <p>何かあったら<button class="lnk" data-open="dFb" type="button">ご意見・要望</button>から送ってね。</p>
+ <p>掲載されていない二人称(呼び方)の情報をお持ちの方は、<button class="lnk" data-open="dInfo" type="button">情報提供</button>よりお寄せください。</p>
+ <p>ご意見・ご要望、不具合のご報告は、<button class="lnk" data-open="dFb" type="button">ご意見・要望</button>よりお送りください。</p>
  <p class="pc-only"><button class="lnk" id="keysBtn" type="button">キーボード操作</button>の一覧は、<kbd>?</kbd>キーでも開けます。</p>
 </footer>
 
@@ -126,13 +135,12 @@ dialog .chk input{width:auto}
 
 <dialog id="dKeys" aria-labelledby="keysTitle">
  <h2 id="keysTitle">キーボード操作</h2>
- <label class="chk"><input type="checkbox" id="keysOn"> 1文字のキー操作を有効にする</label>
  <table><tbody>
-  <tr><td><kbd>/</kbd></td><td>検索窓に移動する</td><td>オフにできる</td></tr>
-  <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>次の話し手 / 前の話し手へ移動する(<kbd>Enter</kbd>で開閉)</td><td>オフにできる</td></tr>
-  <tr><td><kbd>e</kbd> / <kbd>c</kbd></td><td>すべての話し手を開く / 閉じる</td><td>オフにできる</td></tr>
-  <tr><td><kbd>i</kbd></td><td>情報提供のフォームを開く</td><td>オフにできる</td></tr>
-  <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>ページの先頭 / 末尾へ移動する</td><td>オフにできる</td></tr>
+  <tr><td><kbd>/</kbd></td><td>検索窓に移動する</td><td><label class="chk"><input type="checkbox" data-k="slash"> 有効</label></td></tr>
+  <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>次の話し手 / 前の話し手へ移動する(<kbd>Enter</kbd>で開閉)</td><td><label class="chk"><input type="checkbox" data-k="jk"> 有効</label></td></tr>
+  <tr><td><kbd>e</kbd> / <kbd>c</kbd></td><td>すべての話し手を開く / 閉じる</td><td><label class="chk"><input type="checkbox" data-k="ec"> 有効</label></td></tr>
+  <tr><td><kbd>i</kbd></td><td>情報提供のフォームを開く</td><td><label class="chk"><input type="checkbox" data-k="i"> 有効</label></td></tr>
+  <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>ページの先頭 / 末尾へ移動する</td><td><label class="chk"><input type="checkbox" data-k="he"> 有効</label></td></tr>
   <tr><td><kbd>Esc</kbd></td><td>サイドバー(メニュー)を開閉する</td><td>常に有効</td></tr>
   <tr><td><kbd>?</kbd></td><td>この一覧を表示する</td><td>常に有効</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>開いているフォームを送信する(Macは<kbd>Cmd</kbd>+<kbd>Enter</kbd>)</td><td>常に有効</td></tr>
@@ -146,8 +154,8 @@ const API = "https://script.google.com/macros/s/AKfycbzTIBWENAVcqlKrbDNFCgsHSC9F
 const UNK = "(呼称未確認)";
 const $ = s => document.querySelector(s);
 const h = (t, p = {}, ...c) => { const e = document.createElement(t); Object.assign(e, p); e.append(...c); return e; };
-let rows = [], allNames = [], last = 0, cur = -1, keysOn = true;
-try { keysOn = localStorage.getItem("keysOff") !== "1"; } catch (e) {}
+let rows = [], allNames = [], last = 0, cur = -1, keysCfg = { slash: true, jk: true, ec: true, i: true, he: true };
+try { Object.assign(keysCfg, JSON.parse(localStorage.getItem("keysCfg") || "{}")); } catch (e) {}
 const URL_RE = /^https?:\/\/[^\s\/]+\.[^\s\/]+\S*$/;
 function fillT() { // 相手の候補: 話し手と同じ名前には(一人称)を付ける
   const s = $("#fInfo").elements.s.value.trim(), dl = $("#namesT");
@@ -155,6 +163,18 @@ function fillT() { // 相手の候補: 話し手と同じ名前には(一人称)
   allNames.forEach(n => dl.append(h("option", { value: n === s ? n + "(一人称)" : n })));
 }
 
+function renderNotes(notes) { // 管理者からのコメントと更新履歴(シート「お知らせ」)
+  const box = $("#notice");
+  box.replaceChildren();
+  box.hidden = !notes.length;
+  if (!notes.length) return;
+  box.append(h("h2", { id: "noticeT" }, "管理者からのお知らせ"));
+  const entry = n => h("div", { className: "nt" }, h("div", { className: "nd" }, n.d), h("div", { className: "nc" }, n.c));
+  [["コメント", ""], ["更新履歴", "log"]].forEach(([k, cls]) => {
+    const list = notes.filter(n => n.k === k);
+    if (list.length) box.append(h("h3", {}, k), h("div", { className: cls }, ...list.map(entry)));
+  });
+}
 function nickCell(r, label) {
   const td = h("td", {}, );
   td.dataset.l = label;
@@ -218,7 +238,10 @@ window.addEventListener("resize", syncMenu);
 syncMenu();
 $("#navClose").onclick = closeNav;
 document.addEventListener("click", e => { if (!e.target.closest("#nav, #menu")) closeNav(); });
-function openKeys() { $("#keysOn").checked = keysOn; $("#dKeys").showModal(); }
+function openKeys() {
+  document.querySelectorAll("#dKeys [data-k]").forEach(b => { b.checked = keysCfg[b.dataset.k]; });
+  $("#dKeys").showModal();
+}
 function stepSpeaker(dir) { // 表示中の話し手を順に移動(見出しにフォーカスするのでEnterで開閉できる)
   const ds = [...document.querySelectorAll("details:not([hidden])")];
   if (!ds.length) return;
@@ -240,19 +263,21 @@ document.addEventListener("keydown", e => {
   if (k === "Escape") { toggleNav(); return; }
   if (typing) return;
   if (k === "?") { e.preventDefault(); openKeys(); return; }
-  if (!keysOn) return; // 1文字キーはオフにできる
-  if (k === "/") { e.preventDefault(); $("#q").focus(); }
-  else if (k === "j" || k === "k") stepSpeaker(k === "j" ? 1 : -1);
-  else if (k === "e" || k === "c") document.querySelectorAll("details:not([hidden])").forEach(d => { d.open = k === "e"; });
-  else if (k === "i") { e.preventDefault(); $("#dInfo").showModal(); }
-  else if (k === "Home") { e.preventDefault(); scrollTo({ top: 0, behavior: "smooth" }); }
-  else if (k === "End") { e.preventDefault(); scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }); }
+  const c = keysCfg; // 項目ごとにオフにできる
+  if (k === "/" && c.slash) { e.preventDefault(); $("#q").focus(); }
+  else if ((k === "j" || k === "k") && c.jk) stepSpeaker(k === "j" ? 1 : -1);
+  else if ((k === "e" || k === "c") && c.ec) document.querySelectorAll("#list details:not([hidden])").forEach(d => { d.open = k === "e"; });
+  else if (k === "i" && c.i) { e.preventDefault(); $("#dInfo").showModal(); }
+  else if (k === "Home" && c.he) { e.preventDefault(); scrollTo({ top: 0, behavior: "smooth" }); }
+  else if (k === "End" && c.he) { e.preventDefault(); scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }); }
 });
 $("#keysBtn").onclick = openKeys;
-$("#keysOn").onchange = e => {
-  keysOn = e.target.checked;
-  try { localStorage.setItem("keysOff", keysOn ? "0" : "1"); } catch (err) {}
-};
+$("#dKeys").addEventListener("change", e => {
+  const k = e.target.dataset.k;
+  if (!k) return;
+  keysCfg[k] = e.target.checked;
+  try { localStorage.setItem("keysCfg", JSON.stringify(keysCfg)); } catch (err) {}
+});
 
 function unmark(root) {
   root.querySelectorAll("mark").forEach(m => m.replaceWith(m.textContent));
@@ -327,7 +352,7 @@ $("#fFb").addEventListener("submit", e => { e.preventDefault(); send(e.target, "
 $("#fInfo").elements.s.addEventListener("input", fillT);
 
 document.querySelectorAll("form").forEach(f => f.addEventListener("input", () => { f.querySelector(".msg").textContent = ""; }));
-fetch(API).then(r => r.json()).then(j => { if (j.error) throw new Error(j.error); rows = j.rows; render(); })
+fetch(API).then(r => r.json()).then(j => { if (j.error) throw new Error(j.error); rows = j.rows; render(); renderNotes(j.notes || []); })
   .catch(() => { $("#list").textContent = "データを読み込めませんでした。時間をおいて再読み込みしてください。"; });
 </script>
 </body>
