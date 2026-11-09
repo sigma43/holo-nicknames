@@ -30,6 +30,7 @@ kbd{border:1px solid #888;border-radius:3px;padding:0 5px;background:#f6f6f6;fon
 .nbody{padding:4px 12px 10px}
 .opts{flex-basis:100%;display:flex;gap:2px 14px;flex-wrap:wrap;font-size:.85rem;color:#333}
 .opts label{white-space:nowrap;cursor:pointer}
+.opts[hidden]{display:none}
 #notice h3{font-size:.9rem;margin:10px 0 4px;background:var(--hd);padding:2px 8px}
 .nt{padding:4px 0;border-bottom:1px solid #ddd}
 .nt:last-child{border-bottom:0}
@@ -101,9 +102,10 @@ dialog .chk input{width:auto}
 <div class="bar" id="bar">
   <button class="btn" id="menu" type="button" aria-label="メニュー" aria-expanded="true" aria-controls="nav" title="メニュー(Esc)">☰</button>
   <input id="q" type="search" placeholder="話し手・二人称・補足で絞り込み" aria-label="絞り込み">
+ <button class="btn" id="qOptBtn" type="button" aria-expanded="false" aria-controls="qOpts">検索対象 ▾</button>
   <button class="btn pc-only" data-open="dInfo" type="button">情報提供</button>
   <button class="btn pc-only" data-open="dFb" type="button">ご意見・要望</button>
- <div class="opts" id="qOpts"><span>検索対象:</span>
+ <div class="opts" id="qOpts" hidden><span>検索対象:</span>
   <label><input type="checkbox" data-q="s"> 話し手</label>
   <label><input type="checkbox" data-q="n"> 呼び方</label>
   <label><input type="checkbox" data-q="r"> 呼ばれ方</label>
@@ -515,9 +517,17 @@ document.querySelectorAll("#qOpts [data-q]").forEach(b => {
   b.onchange = () => {
     qOpt[b.dataset.q] = b.checked;
     try { localStorage.setItem("qOpt", JSON.stringify(qOpt)); } catch (err) {}
+    syncQBtn();
     runSearch();
   };
 });
+function syncQBtn() { // 閉じていても、一部だけ選んでいると分かるように件数を出す
+  const n = Object.values(qOpt).filter(Boolean).length, open = !$("#qOpts").hidden;
+  $("#qOptBtn").textContent = "検索対象" + (n && n < 4 ? "(" + n + "/4)" : "") + (open ? " ▴" : " ▾");
+  $("#qOptBtn").setAttribute("aria-expanded", open);
+}
+$("#qOptBtn").onclick = () => { $("#qOpts").hidden = !$("#qOpts").hidden; syncQBtn(); };
+syncQBtn();
 
 document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { closeNav(); document.getElementById(b.dataset.open).showModal(); });
 document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
