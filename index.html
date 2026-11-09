@@ -4,18 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ホロライブ 二人称まとめ(非公式)</title>
-<!-- ファビコン -->
-<link rel="icon" type="image/png" href="favicon.png">
-
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-
-<link rel="manifest" href="manifest.json">
-
-<meta name="theme-color" content="#ffffff">
-
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="二人称まとめ">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 :root{--hd:#bdbdbd;--alt:#f0f0f0;--mut:#8a8a8a;--ac:#1a56c4;color-scheme:light}
 *{box-sizing:border-box}
@@ -38,14 +26,16 @@ kbd{border:1px solid #888;border-radius:3px;padding:0 5px;background:#f6f6f6;fon
 #dKeys table{margin-top:10px}
 #dKeys th,#dKeys td{padding:4px 8px}
 #dKeys td label{margin:0}
-#notice{border:1px solid #222;padding:8px 12px;margin-bottom:16px}
-#notice h2{font-size:1rem;margin:0 0 4px}
+#notice{margin-bottom:16px}
+.nbody{padding:4px 12px 10px}
+.opts{flex-basis:100%;display:flex;gap:2px 14px;flex-wrap:wrap;font-size:.85rem;color:#333}
+.opts label{white-space:nowrap;cursor:pointer}
 #notice h3{font-size:.9rem;margin:10px 0 4px;background:var(--hd);padding:2px 8px}
 .nt{padding:4px 0;border-bottom:1px solid #ddd}
 .nt:last-child{border-bottom:0}
 .nd{font-size:.8rem;color:#555}
 .nc{white-space:pre-wrap;overflow-wrap:anywhere}
-.log{max-height:12em;overflow:auto}
+.nlist{position:relative;overflow-y:auto}
 mark{background:#ffe066;color:#111}
 .grp-d>summary{background:#555;color:#fff}
 .gbody{padding:8px}
@@ -113,10 +103,15 @@ dialog .chk input{width:auto}
   <input id="q" type="search" placeholder="話し手・二人称・補足で絞り込み" aria-label="絞り込み">
   <button class="btn pc-only" data-open="dInfo" type="button">情報提供</button>
   <button class="btn pc-only" data-open="dFb" type="button">ご意見・要望</button>
+ <div class="opts" id="qOpts"><span>検索対象:</span>
+  <label><input type="checkbox" data-q="s"> 話し手</label>
+  <label><input type="checkbox" data-q="n"> 呼び方</label>
+  <label><input type="checkbox" data-q="r"> 呼ばれ方</label>
+  <label><input type="checkbox" data-q="p"> 補足</label></div>
 </div>
 <div class="wrap">
  <nav id="nav" aria-label="話し手一覧"><button class="btn" id="navClose" type="button">閉じる</button><div id="navActions"><button class="btn" data-open="dInfo" type="button">情報提供</button><button class="btn" data-open="dFb" type="button">ご意見・要望</button></div><div id="navList"></div></nav>
- <main><section id="notice" hidden aria-labelledby="noticeT"></section><div id="list">読み込み中…</div></main>
+ <main><details id="notice" hidden open aria-labelledby="noticeT"></details><div id="list">読み込み中…</div></main>
 </div>
 <footer>
  <p>掲載内容は有志の確認によるもので、正確さを保証するものではありません。限定配信など、有料コンテンツから得た情報は掲載しません。</p>
@@ -182,10 +177,13 @@ dialog .chk input{width:auto}
 // ★ GASをデプロイして得た「ウェブアプリのURL」をここに貼る
 const API = "https://script.google.com/macros/s/AKfycbzTIBWENAVcqlKrbDNFCgsHSC9FOBix5bFmald-nJDZrj9fGUUpe1_YK59fMdop1C-C-w/exec";
 const UNK = "(呼称未確認)";
+const NO_ACCORDION = ["(視聴者)", "\uff08視聴者\uff09"]; // 話し手としてアコーディオンを作らない名前(「相手」の欄には表示される)
 const $ = s => document.querySelector(s);
 const h = (t, p = {}, ...c) => { const e = document.createElement(t); Object.assign(e, p); e.append(...c); return e; };
 let rows = [], members = [], allNames = [], last = 0, cur = -1, keysCfg = { slash: true, jk: true, ec: true, i: true, he: true, up: true };
 try { Object.assign(keysCfg, JSON.parse(localStorage.getItem("keysCfg") || "{}")); } catch (e) {}
+let qOpt = { s: true, n: true, r: true, p: true }; // 検索対象: 話し手 / 呼び方 / 呼ばれ方 / 補足
+try { Object.assign(qOpt, JSON.parse(localStorage.getItem("qOpt") || "{}")); } catch (e) {}
 const URL_RE = /^https?:\/\/[^\s\/]+\.[^\s\/]+\S*$/;
 function fillT() { // 相手の候補: 話し手と同じ名前には(一人称)を付ける
   const s = $("#fInfo").elements.s.value.trim(), dl = $("#namesT");
@@ -251,17 +249,33 @@ function hideTip(now) {
   const go = () => { $("#tipBox").hidden = true; if (tipFor) tipFor.removeAttribute("aria-describedby"); tipFor = null; tipPinned = false; };
   if (now) go(); else tipTimer = setTimeout(go, 250);
 }
+function fitNotes() { // 各一覧の高さを「先頭5件ぶん」にそろえる(超えた分はスクロール)
+  document.querySelectorAll("#notice .nlist").forEach(list => {
+    const items = [...list.children];
+    if (items.length <= 5) { list.style.maxHeight = ""; return; }
+    const prev = list.style.maxHeight;
+    list.style.maxHeight = "none"; // 測るために一度解除
+    const bottom = items[4].offsetTop + items[4].offsetHeight;
+    list.style.maxHeight = bottom ? bottom + "px" : prev; // 閉じていて測れないときは、そのまま
+  });
+}
 function renderNotes(notes) { // 管理者からのコメントと更新履歴(シート「お知らせ」)
   const box = $("#notice");
   box.replaceChildren();
   box.hidden = !notes.length;
   if (!notes.length) return;
-  box.append(h("h2", { id: "noticeT" }, "管理者からのお知らせ"));
+  const body = h("div", { className: "nbody" });
   const entry = n => h("div", { className: "nt" }, h("div", { className: "nd" }, n.d), h("div", { className: "nc" }, n.c));
-  [["コメント", ""], ["更新履歴", "log"]].forEach(([k, cls]) => {
+  ["コメント", "更新履歴"].forEach(k => {
     const list = notes.filter(n => n.k === k);
-    if (list.length) box.append(h("h3", {}, k), h("div", { className: cls }, ...list.map(entry)));
+    if (!list.length) return;
+    const more = list.length > 5;
+    const box2 = h("div", { className: "nlist" }, ...list.map(entry));
+    if (more) { box2.tabIndex = 0; box2.setAttribute("role", "region"); box2.setAttribute("aria-label", k + "の一覧(スクロールできます)"); }
+    body.append(h("h3", {}, k + (more ? "(全" + list.length + "件・スクロールで過去分)" : "")), box2);
   });
+  box.append(h("summary", { id: "noticeT" }, "管理者からのお知らせ"), body);
+  fitNotes();
 }
 function nickCell(r, label) {
   const td = h("td", {}, );
@@ -285,13 +299,14 @@ function speakerBlock(s, id, info, gOrder) {
     const tr = h("tr", {}, h("td", { textContent: self ? r.t + "(一人称)" : r.t }),
       nickCell(r, "呼び方(" + s + "→)"), revCell);
     tr.children[0].dataset.l = "相手";
-    tr.dataset.h = [r.n, r.x, rev && rev.n, rev && rev.x, r.note].filter(Boolean).map(vis).join("\n").toLowerCase();
+    const lc = (...a) => a.filter(Boolean).map(vis).join("\n").toLowerCase();
+    tr.dataset.hn = lc(r.n, r.x); tr.dataset.hr = lc(rev && rev.n, rev && rev.x); tr.dataset.hp = lc(r.note);
     tb.append(tr);
     if (r.note) { // 補足は、下に1行まるごと使って小さく表示する
       tr.className = "hn";
       const nr = h("tr", { className: "note" }, h("td", { colSpan: 3 },
         h("div", { className: "nwrap" }, h("span", { className: "nlab" }, "補足"), h("span", { className: "ntx" }, rich(r.note)))));
-      nr.dataset.h = tr.dataset.h; // 検索では本来の行と一緒に表示・非表示にする
+      nr.dataset.hn = tr.dataset.hn; nr.dataset.hr = tr.dataset.hr; nr.dataset.hp = tr.dataset.hp; // 検索では本来の行と一緒に表示・非表示にする
       tb.append(nr);
     }
   });
@@ -305,7 +320,7 @@ function speakerBlock(s, id, info, gOrder) {
 function render() {
   const nav = $("#navList"), list = $("#list");
   nav.replaceChildren(); list.replaceChildren();
-  const speakers = [...new Set(rows.map(r => r.s))];
+  const speakers = [...new Set(rows.map(r => r.s))].filter(s => !NO_ACCORDION.includes(s));
   if (!speakers.length) { list.textContent = "まだデータがありません。"; return; }
   const info = {};
   members.forEach(m => { info[m.name] = m; });
@@ -413,6 +428,8 @@ document.addEventListener("keydown", e => {
   else if (k === "End" && c.he) { e.preventDefault(); scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }); }
 });
 $("#keysBtn").onclick = openKeys;
+$("#notice").addEventListener("toggle", fitNotes);
+addEventListener("resize", fitNotes);
 $("#upBtn").onclick = closeOneLevel; // スマホ右下のボタン(キー u と同じ)
 const ttOf = e => e.target.closest && e.target.closest(".tt");
 const inTip = e => e.target.closest && e.target.closest("#tipBox");
@@ -455,15 +472,17 @@ function mark(el, q) {
     }
   });
 }
-$("#q").addEventListener("input", e => {
-  const q = e.target.value.trim().toLowerCase();
+function runSearch() {
+  const q = $("#q").value.trim().toLowerCase();
+  const o = Object.values(qOpt).some(Boolean) ? qOpt : { s: true, n: true, r: true, p: true }; // 何も選ばなければ全部が対象
   document.querySelectorAll("#list .sp").forEach(d => {
-    const sm = d.dataset.s.toLowerCase().includes(q);
+    const sm = o.s && d.dataset.s.toLowerCase().includes(q);
     unmark(d);
     let n = 0;
     d.querySelectorAll("tbody tr").forEach(tr => {
       const grp = tr.classList.contains("grp");
-      const hit = !q || sm || (!grp && tr.dataset.h.includes(q));
+      const D = tr.dataset;
+      const hit = !q || sm || (!grp && ((o.n && D.hn.includes(q)) || (o.r && D.hr.includes(q)) || (o.p && D.hp.includes(q))));
       tr.hidden = grp ? !!q : !hit;
       if (hit && !grp) n++;
     });
@@ -475,11 +494,11 @@ $("#q").addEventListener("input", e => {
     d.hidden = !!q && !n;
     d.open = !!q && n > 0;
     navLink(d.id).hidden = d.hidden;
-    if (q) {
-      mark(d.querySelector("summary"), q);
+    if (q) { // 対象にした欄だけ強調表示する
+      if (o.s) mark(d.querySelector("summary"), q);
       d.querySelectorAll("tbody tr:not(.grp)").forEach(tr => {
-        if (tr.classList.contains("note")) mark(tr.querySelector(".ntx"), q);
-        else [1, 2].forEach(k => mark(tr.children[k], q));
+        if (tr.classList.contains("note")) { if (o.p) mark(tr.querySelector(".ntx"), q); }
+        else { if (o.n) mark(tr.children[1], q); if (o.r) mark(tr.children[2], q); }
       });
     }
   });
@@ -489,6 +508,15 @@ $("#q").addEventListener("input", e => {
     g.open = !!q && !!any;
     navLink(g.id).hidden = g.hidden;
   });
+}
+$("#q").addEventListener("input", runSearch);
+document.querySelectorAll("#qOpts [data-q]").forEach(b => {
+  b.checked = qOpt[b.dataset.q];
+  b.onchange = () => {
+    qOpt[b.dataset.q] = b.checked;
+    try { localStorage.setItem("qOpt", JSON.stringify(qOpt)); } catch (err) {}
+    runSearch();
+  };
 });
 
 document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { closeNav(); document.getElementById(b.dataset.open).showModal(); });
