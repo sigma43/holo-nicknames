@@ -63,7 +63,7 @@ tr.note td{font-size:.8rem;line-height:1.35;padding:2px 10px;color:#333}
 .nlab{flex:none;font-weight:700;border-right:1px solid #222;padding-right:8px}
 .ntx{min-width:0;overflow-wrap:anywhere}
 .tt{border-bottom:1px dotted currentColor;cursor:help}
-.tt.src{color:#FFA8A8}
+.tt.src{color:#8A0000}
 #tipBox{position:fixed;z-index:40;max-width:min(22em,calc(100vw - 16px));background:#222;color:#fff;padding:6px 10px;border-radius:4px;font-size:.85rem;font-weight:400;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;box-shadow:0 2px 6px rgba(0,0,0,.35)}
 #tipBox[hidden]{display:none}
 #tipBox a{color:#9cc4ff}
@@ -230,7 +230,7 @@ function rich(str) { // 「{範囲}[注釈]」→ 範囲の文字列にツール
   frag.append(str.slice(pos));
   return frag;
 }
-function richStar(str) { // 「*文字*」→ ピンクの文字+ツールチップ「出典情報募集中」(*は表示しない)。残りは rich() で処理
+function richStar(str) { // 「*文字*」→ 赤い文字+ツールチップ「出典情報募集中」(*は表示しない)。残りは rich() で処理
   const frag = document.createDocumentFragment(), re = /\*([^*]+)\*/g;
   let pos = 0, m;
   while ((m = re.exec(str))) {
