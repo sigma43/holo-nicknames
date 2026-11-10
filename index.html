@@ -39,7 +39,7 @@ kbd{border:1px solid #888;border-radius:3px;padding:0 5px;background:#f6f6f6;fon
 .nd{font-size:.8rem;color:#555}
 .nc{white-space:pre-wrap;overflow-wrap:anywhere}
 .nlist{position:relative;overflow-y:auto}
-mark{background:#ffe066;color:#111}
+mark{background:#FFFF99;color:#111}
 .grp-d>summary{background:#555;color:#fff}
 .gbody{padding:8px}
 nav a.ng{font-weight:700;margin-top:6px}
@@ -63,6 +63,7 @@ tr.note td{font-size:.8rem;line-height:1.35;padding:2px 10px;color:#333}
 .nlab{flex:none;font-weight:700;border-right:1px solid #222;padding-right:8px}
 .ntx{min-width:0;overflow-wrap:anywhere}
 .tt{border-bottom:1px dotted currentColor;cursor:help}
+.tt.src{color:#FFA8A8}
 #tipBox{position:fixed;z-index:40;max-width:min(22em,calc(100vw - 16px));background:#222;color:#fff;padding:6px 10px;border-radius:4px;font-size:.85rem;font-weight:400;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;box-shadow:0 2px 6px rgba(0,0,0,.35)}
 #tipBox[hidden]{display:none}
 #tipBox a{color:#9cc4ff}
@@ -195,7 +196,11 @@ function fillT() { // 相手の候補: 話し手と同じ名前には(一人称)
   allNames.forEach(n => dl.append(h("option", { value: n === s ? n + "(一人称)" : n })));
 }
 
-const vis = s => String(s).replace(/\{([^{}]*)\}\[[^\[\]]*\]/g, "$1").replace(/\[[^\[\]]*\]/g, ""); // 画面に見える文字だけ(検索用)
+const vis = (s, star) => { // 画面に見える文字だけ(検索用)。star=二人称・特例の欄では *…* の * も除く
+  let t = String(s);
+  if (star) t = t.replace(/\*([^*]+)\*/g, "$1");
+  return t.replace(/\{([^{}]*)\}\[[^\[\]]*\]/g, "$1").replace(/\[[^\[\]]*\]/g, "");
+};
 function rich(str) { // 「{範囲}[注釈]」→ 範囲の文字列にツールチップ。{ }と[ ]自体は表示しない。{ }がなければ[ ]の直前の1文字
   const frag = document.createDocumentFragment(), re = /(?:\{([^{}]*)\})?\[([^\[\]]*)\]/g;
   let pos = 0, m, tt = null, ttEnd = -1;
@@ -223,6 +228,19 @@ function rich(str) { // 「{範囲}[注釈]」→ 範囲の文字列にツール
     pos = ttEnd = re.lastIndex;
   }
   frag.append(str.slice(pos));
+  return frag;
+}
+function richStar(str) { // 「*文字*」→ ピンクの文字+ツールチップ「出典情報募集中」(*は表示しない)。残りは rich() で処理
+  const frag = document.createDocumentFragment(), re = /\*([^*]+)\*/g;
+  let pos = 0, m;
+  while ((m = re.exec(str))) {
+    frag.append(rich(str.slice(pos, m.index)));
+    const t = h("span", { className: "tt src", tabIndex: 0, textContent: m[1] });
+    t.dataset.tip = "出典情報募集中";
+    frag.append(t);
+    pos = re.lastIndex;
+  }
+  frag.append(rich(str.slice(pos)));
   return frag;
 }
 function tipNodes(s) { // 【URL】をリンクにする(【】は表示しない。http/httpsのみ)
@@ -285,8 +303,8 @@ function nickCell(r, label) {
   const td = h("td", {}, );
   td.dataset.l = label;
   if (!r || (!r.n && !r.x)) { td.append(h("span", { className: "unk" }, UNK)); return td; }
-  if (r.n) td.append(rich(r.n));
-  if (r.x) td.append(h("small", {}, "特例: ", rich(r.x)));
+  if (r.n) td.append(richStar(r.n));
+  if (r.x) td.append(h("small", {}, "特例: ", richStar(r.x)));
   return td;
 }
 
@@ -303,8 +321,8 @@ function speakerBlock(s, id, info, gOrder) {
     const tr = h("tr", {}, h("td", { textContent: self ? r.t + "(一人称)" : r.t }),
       nickCell(r, "呼び方(" + s + "→)"), revCell);
     tr.children[0].dataset.l = "相手";
-    const lc = (...a) => a.filter(Boolean).map(vis).join("\n").toLowerCase();
-    tr.dataset.hn = lc(r.n, r.x); tr.dataset.hr = lc(rev && rev.n, rev && rev.x); tr.dataset.hp = lc(r.note);
+    const lc = (star, ...a) => a.filter(Boolean).map(x => vis(x, star)).join("\n").toLowerCase();
+    tr.dataset.hn = lc(true, r.n, r.x); tr.dataset.hr = lc(true, rev && rev.n, rev && rev.x); tr.dataset.hp = lc(false, r.note);
     tb.append(tr);
     if (r.note) { // 補足は、下に1行まるごと使って小さく表示する
       tr.className = "hn";
